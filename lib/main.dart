@@ -188,6 +188,9 @@ class ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _isClaimed = false;
 
+  // 定义动画时长常量
+  static const int deleteAnimationDuration = 150; // 毫秒
+
   /// 日期选择方法
   Future<void> _selectDate() async {
     final picked = await showDatePicker(
@@ -220,7 +223,7 @@ class ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
     if (_listKey.currentState != null) {
       _listKey.currentState!.insertItem(
         0,
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: deleteAnimationDuration),
       );
     }
 
@@ -397,20 +400,15 @@ class ExpenseTrackerScreenState extends State<ExpenseTrackerScreen> {
           // 提前获取 Provider 实例
           final provider = Provider.of<ExpenseProvider>(context, listen: false);
 
+          // 先删除数据，再播放动画 - 这是修复的关键
+          provider.removeExpense(expense.id);
+
           // 播放删除动画
           _listKey.currentState?.removeItem(
             index,
             (context, animation) => _buildRemovingItem(expense, animation),
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: deleteAnimationDuration),
           );
-
-          // 添加延迟并检查 mounted
-          Future.delayed(const Duration(milliseconds: 300), () {
-            // 只在组件仍然挂载时执行操作
-            if (mounted) {
-              provider.removeExpense(expense.id);
-            }
-          });
         },
         child: Card(
           margin: const EdgeInsets.all(5),
@@ -698,13 +696,13 @@ class _ExpenseItem extends StatelessWidget {
                     listen: false,
                   ).toggleStatus(expense.id),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 150),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color:
                       expense.isClaimed
                           ? Colors.green[100] // 已报账状态背景色
-                          : Colors.orange[100], // 未报账状态背景色
+                          : Colors.orange[100], // 未报账状态背景极
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
