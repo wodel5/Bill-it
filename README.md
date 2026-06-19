@@ -17,8 +17,8 @@
 ## 截图
 
 <p align="center">
-  <img src="images/screenshots/1.png" width="45%" />
-  <img src="images/screenshots/2.png" width="45%" />
+  <img src="images/screenshots/screenshots-1.png" width="45%" />
+  <img src="images/screenshots/screenshots-2.png" width="45%" />
 </p>
 
 ## 技术栈
