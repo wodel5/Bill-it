@@ -21,14 +21,6 @@
   <img src="images/screenshots/screenshots-2.png" width="45%" />
 </p>
 
-## 技术栈
-
-- Flutter 3.x + Dart
-- Provider 状态管理
-- SharedPreferences 本地持久化
-- flutter_slidable 滑动操作
-- intl 国际化（中/英）
-
 ## 运行
 
 ```bash
