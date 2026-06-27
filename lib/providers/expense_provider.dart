@@ -8,7 +8,9 @@ import '../data_models/expense.dart';
 class ExpenseProvider extends ChangeNotifier {
   //定义一个私有缓存，钥匙名为'expenseRecords'
   final _storageKey = 'expenseRecords';
+  final _groupFundKey = 'groupFund';
   final List<Expense> _expenses = []; //空列表，类型为Expense，后续可以追加
+  double? _groupFund;
 
   ExpenseProvider() {
     loadData();
@@ -36,6 +38,10 @@ class ExpenseProvider extends ChangeNotifier {
           .where((e) => !e.isDeleted && !e.isBilled)
           .fold(0, (sum, e) => sum + e.amount);
 
+  double? get groupFund => _groupFund;
+
+  double get groupFundRemaining => (_groupFund ?? 0) - totalAmount;
+
   //载入数据：异步
   Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -44,8 +50,10 @@ class ExpenseProvider extends ChangeNotifier {
       _expenses
         ..clear()
         ..addAll(data.map((e) => Expense.fromJson(jsonDecode(e))));//解析JSON 字符串，逐条还原成 Expense 对象，加到内存列表里
-      notifyListeners();//通知所有监听当前  ChangeNotifier  的 Widget，数据已经更新
     }
+    final fund = prefs.getDouble(_groupFundKey);
+    if (fund != null) _groupFund = fund;
+    notifyListeners();//通知所有监听当前  ChangeNotifier  的 Widget，数据已经更新
   }
 
   Future<void> _saveData() async {
@@ -113,6 +121,27 @@ class ExpenseProvider extends ChangeNotifier {
       _expenses[i] = updated;
       _saveData();
       notifyListeners();
+    }
+  }
+
+  void setGroupFund(double amount) {
+    _groupFund = amount;
+    _saveGroupFund();
+    notifyListeners();
+  }
+
+  void clearGroupFund() {
+    _groupFund = null;
+    _saveGroupFund();
+    notifyListeners();
+  }
+
+  Future<void> _saveGroupFund() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_groupFund != null) {
+      await prefs.setDouble(_groupFundKey, _groupFund!);
+    } else {
+      await prefs.remove(_groupFundKey);
     }
   }
 }

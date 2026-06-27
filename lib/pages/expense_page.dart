@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
 import '../data_models/expense.dart';
-import '../data_models/category.dart';
 import '../providers/expense_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/theme_provider.dart';
@@ -10,6 +9,8 @@ import '../widgets/expense_item.dart';
 import '../popup/add_expense_sheet.dart';
 import '../popup/edit_expense_dialog.dart' show showEditExpenseSheet;
 import '../popup/trash_sheet.dart';
+import '../popup/updates.dart';
+import '../services/update_service.dart';
 
 class ExpensePage extends StatefulWidget {
   const ExpensePage({super.key});
@@ -131,6 +132,18 @@ class _ExpensePageState extends State<ExpensePage> {
     _searchFocusNode.addListener(() {
       setState(() => _searchFocused = _searchFocusNode.hasFocus);
     });
+    _silentCheckUpdate();
+  }
+
+  Future<void> _silentCheckUpdate() async {
+    await UpdateService.silentCheck();
+    if (!mounted) return;
+    if (UpdateService.hasNewVersion.value) {
+      final skipped = await UpdateService.getSkippedVersion();
+      if (skipped != UpdateService.latestVersion) {
+        showUpdateDialog(context);
+      }
+    }
   }
 
   @override
@@ -223,8 +236,9 @@ class _ExpensePageState extends State<ExpensePage> {
   List<Expense> _applyFilters(List<Expense> expenses) {
     return expenses.where((e) {
       if (_filterStatus != null && e.isBilled != _filterStatus) return false;
-      if (_filterCategoryId != null && e.categoryId != _filterCategoryId)
+      if (_filterCategoryId != null && e.categoryId != _filterCategoryId) {
         return false;
+      }
       if (_filterPerson != null && e.fromPerson != _filterPerson) return false;
       return true;
     }).toList();
@@ -258,11 +272,6 @@ class _ExpensePageState extends State<ExpensePage> {
     sortGroup(pinned);
     sortGroup(unpinned);
     return [...pinned, ...unpinned];
-  }
-
-  void _rebuildList() {
-    _currentExpenses = _applyAll(_provider!.sortedExpenses);
-    _listKey = GlobalKey();
   }
 
   String _sortLabel(SortMode m) {
@@ -302,17 +311,102 @@ class _ExpensePageState extends State<ExpensePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          '报账了吗',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).primaryColor,
-            letterSpacing: 1.2,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '报账了吗',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).primaryColor,
+                letterSpacing: 1.2,
+              ),
+            ),
+            Transform.translate(
+              offset: const Offset(0, -4),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  '$_totalCount条',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
         centerTitle: false,
         actions: [
+          ValueListenableBuilder<double>(
+            valueListenable: UpdateService.downloadProgress,
+            builder: (_, progress, __) {
+              if (UpdateService.isDownloading) {
+                return GestureDetector(
+                  onTap: () => showDownloadDialog(context),
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 2.5,
+                          backgroundColor: Theme.of(context).dividerColor,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              Theme.of(context).primaryColor),
+                        ),
+                        Text(
+                          '${(progress * 100).toInt()}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              return ValueListenableBuilder<bool>(
+                valueListenable: UpdateService.hasNewVersion,
+                builder: (_, hasUpdate, __) => Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.loop),
+                      color: Theme.of(context).primaryColor,
+                      iconSize: 22,
+                      onPressed: () => showUpdateDialog(context),
+                    ),
+                    if (hasUpdate)
+                      Positioned(
+                        top: 6,
+                        right: 6,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.secondary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
             color: Theme.of(context).primaryColor,
@@ -334,8 +428,8 @@ class _ExpensePageState extends State<ExpensePage> {
       body: SafeArea(
         child: Column(
           children: [
-            _SearchAddBar(),
-            _SortFilterBar(),
+            _searchAddBar(),
+            _sortFilterBar(),
             Expanded(
               child: SlidableAutoCloseBehavior(
                 child: GestureDetector(
@@ -364,7 +458,7 @@ class _ExpensePageState extends State<ExpensePage> {
                 ),
               ),
             ),
-            _GlassSummaryBar(),
+            _glassSummaryBar(),
           ],
         ),
       ),
@@ -398,7 +492,7 @@ class _ExpensePageState extends State<ExpensePage> {
     );
   }
 
-  Widget _SearchAddBar() {
+  Widget _searchAddBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       child: Row(
@@ -463,21 +557,35 @@ class _ExpensePageState extends State<ExpensePage> {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).dividerColor),
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              '$_totalCount条',
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).textTheme.bodySmall?.color,
+          GestureDetector(
+            onTap: _showSetGroupFundDialog,
+            child: Container(
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Theme.of(context).dividerColor),
               ),
+              alignment: Alignment.center,
+              child: _provider?.groupFund != null
+                  ? Text(
+                      '余额 ${_formatAmount(_provider!.groupFundRemaining)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _provider!.groupFundRemaining < 0
+                            ? Theme.of(context).colorScheme.secondary
+                            : Theme.of(context).primaryColor,
+                      ),
+                    )
+                  : Text(
+                      '设置余额',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -485,7 +593,7 @@ class _ExpensePageState extends State<ExpensePage> {
     );
   }
 
-  Widget _SortFilterBar() {
+  Widget _sortFilterBar() {
     final catProvider = Provider.of<CategoryProvider>(context);
     final categories = catProvider.categories;
     final persons = <String>{
@@ -678,12 +786,15 @@ class _ExpensePageState extends State<ExpensePage> {
     );
   }
 
-  Widget _GlassSummaryBar() {
+  Widget _glassSummaryBar() {
     final all = _provider?.sortedExpenses ?? [];
     final base = all.where((e) {
-      if (_filterCategoryId != null && e.categoryId != _filterCategoryId)
+      if (_filterCategoryId != null && e.categoryId != _filterCategoryId) {
         return false;
-      if (_filterPerson != null && e.fromPerson != _filterPerson) return false;
+      }
+      if (_filterPerson != null && e.fromPerson != _filterPerson) {
+        return false;
+      }
       return true;
     }).toList();
     final total = base.fold<double>(0, (s, e) => s + e.amount);
@@ -731,6 +842,114 @@ class _ExpensePageState extends State<ExpensePage> {
             pillColor: const Color(0xFFF3F3F3).withValues(alpha: 0.25),
           ),
         ],
+      ),
+    );
+  }
+
+  String _formatAmount(double amount) {
+    if (amount >= 100000000) {
+      return '¥${(amount / 100000000).toStringAsFixed(2)}亿';
+    } else if (amount >= 10000) {
+      return '¥${(amount / 10000).toStringAsFixed(2)}万';
+    } else {
+      return '¥${amount.toStringAsFixed(2)}';
+    }
+  }
+
+  void _showSetGroupFundDialog() {
+    final controller = TextEditingController(
+      text: _provider?.groupFund?.toStringAsFixed(2) ?? '',
+    );
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.account_balance_wallet,
+                color: Theme.of(context).primaryColor, size: 24),
+            const SizedBox(width: 8),
+            const Text('设置余额', style: TextStyle(fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '请输入组里总资金',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                if (_provider?.groupFund != null) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        _provider!.clearGroupFund();
+                        Navigator.pop(context);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.grey.withValues(alpha: 0.12),
+                        minimumSize: const Size(double.infinity, 46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide.none,
+                      ),
+                      child: const Text('清除', style: TextStyle(color: Colors.red, fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.grey.withValues(alpha: 0.12),
+                      minimumSize: const Size(double.infinity, 46),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      side: BorderSide.none,
+                    ),
+                    child: const Text('取消', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final value = double.tryParse(controller.text);
+                      if (value != null) {
+                        _provider!.setGroupFund(value);
+                      }
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      minimumSize: const Size(double.infinity, 46),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('确定', style: TextStyle(color: Colors.white, fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: const [],
       ),
     );
   }

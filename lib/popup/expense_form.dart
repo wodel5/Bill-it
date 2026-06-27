@@ -124,8 +124,6 @@ class _ExpenseFormSheetState extends State<ExpenseFormSheet> {
         isDense: true,
       );
 
-  Widget _buildField(Widget child) => child;
-
   @override
   Widget build(BuildContext context) {
     final catProvider = Provider.of<CategoryProvider>(context);
