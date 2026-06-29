@@ -461,7 +461,14 @@ class _ExpensePageState extends State<ExpensePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_isMultiSelectMode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _isMultiSelectMode) {
+          _exitMultiSelect();
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -690,6 +697,7 @@ class _ExpensePageState extends State<ExpensePage> {
                   ),
           ],
         ),
+      ),
       ),
     );
   }
