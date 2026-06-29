@@ -10,11 +10,13 @@ class UpdateInfo {
   final String latestVersion;
   final String downloadUrl;
   final String fileName;
+  final String body;
 
   UpdateInfo({
     required this.latestVersion,
     required this.downloadUrl,
     required this.fileName,
+    this.body = '',
   });
 }
 
@@ -80,6 +82,7 @@ class UpdateService {
       final data = response.data;
       final tagName = data['tag_name'] as String? ?? '';
       final version = tagName.replaceFirst('v', '');
+      final body = data['body'] as String? ?? '';
       final assets = data['assets'] as List<dynamic>? ?? [];
       for (final asset in assets) {
         final name = asset['name'] as String? ?? '';
@@ -90,6 +93,7 @@ class UpdateService {
               latestVersion: version,
               downloadUrl: downloadUrl,
               fileName: name,
+              body: body,
             );
           }
         }

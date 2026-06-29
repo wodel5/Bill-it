@@ -11,6 +11,12 @@ import '../popup/edit_expense_dialog.dart' show showEditExpenseSheet;
 import '../popup/trash_sheet.dart';
 import '../popup/updates.dart';
 import '../services/update_service.dart';
+import 'widgets/search_add_bar.dart';
+import 'widgets/sort_filter_bar.dart';
+import 'widgets/multi_select_bar.dart';
+import 'widgets/summary_bar.dart';
+import 'widgets/expense_actions.dart';
+import 'widgets/empty_state.dart';
 
 class ExpensePage extends StatefulWidget {
   const ExpensePage({super.key});
@@ -109,6 +115,8 @@ class _ExpensePageState extends State<ExpensePage> {
   String? _filterPerson;
   int _summaryFilter;
   bool _isDropdownOpen = false;
+  bool _isMultiSelectMode = false;
+  final Set<String> _selectedIds = {};
 
   _ExpensePageState() : _summaryFilter = -1;
 
@@ -152,6 +160,59 @@ class _ExpensePageState extends State<ExpensePage> {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _enterMultiSelect(String id) {
+    setState(() {
+      _isMultiSelectMode = true;
+      _selectedIds.clear();
+      _selectedIds.add(id);
+    });
+  }
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isMultiSelectMode = false;
+      } else {
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  void _exitMultiSelect() {
+    setState(() {
+      _isMultiSelectMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _selectAll() {
+    setState(() {
+      if (_selectedIds.length == _currentExpenses.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds.addAll(_currentExpenses.map((e) => e.id));
+      }
+    });
+  }
+
+  void _batchToggleBilled(bool billed) {
+    for (final id in _selectedIds) {
+      final expense = _currentExpenses.firstWhere((e) => e.id == id);
+      if (expense.isBilled != billed) {
+        _provider!.toggleStatus(id);
+      }
+    }
+    _exitMultiSelect();
+  }
+
+  void _batchDelete() {
+    for (final id in _selectedIds) {
+      _provider!.moveToTrash(id);
+    }
+    _exitMultiSelect();
   }
 
   void _onExpensesChanged() {
@@ -274,23 +335,6 @@ class _ExpensePageState extends State<ExpensePage> {
     return [...pinned, ...unpinned];
   }
 
-  String _sortLabel(SortMode m) {
-    switch (m) {
-      case SortMode.newest:
-        return '最近添加';
-      case SortMode.oldest:
-        return '最早添加';
-      case SortMode.amountHigh:
-        return '金额高→低';
-      case SortMode.amountLow:
-        return '金额低→高';
-      case SortMode.purposeAsc:
-        return '用途 A→Z';
-      case SortMode.purposeDesc:
-        return '用途 Z→A';
-    }
-  }
-
   int get _totalCount => _provider?.sortedExpenses.length ?? 0;
 
   void _openTrash() => showTrashSheet(context);
@@ -305,6 +349,114 @@ class _ExpensePageState extends State<ExpensePage> {
       case ThemeMode.system:
         return Icons.settings_brightness;
     }
+  }
+
+  String _formatAmount(double amount) {
+    if (amount >= 100000000) {
+      return '¥${(amount / 100000000).toStringAsFixed(2)}亿';
+    } else if (amount >= 10000) {
+      return '¥${(amount / 10000).toStringAsFixed(2)}万';
+    } else {
+      return '¥${amount.toStringAsFixed(2)}';
+    }
+  }
+
+  void _showSetGroupFundDialog() {
+    final controller = TextEditingController(
+      text: _provider?.groupFund?.toStringAsFixed(2) ?? '',
+    );
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.account_balance_wallet,
+                color: Theme.of(context).primaryColor, size: 24),
+            const SizedBox(width: 8),
+            const Text('设置余额', style: TextStyle(fontSize: 18)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: '请输入组里总资金',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                if (_provider?.groupFund != null) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        _provider!.clearGroupFund();
+                        Navigator.pop(context);
+                      },
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.grey.withValues(alpha: 0.12),
+                        minimumSize: const Size(double.infinity, 46),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide.none,
+                      ),
+                      child: const Text('清除', style: TextStyle(color: Colors.red, fontSize: 16)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.grey.withValues(alpha: 0.12),
+                      minimumSize: const Size(double.infinity, 46),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      side: BorderSide.none,
+                    ),
+                    child: const Text('取消', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final value = double.tryParse(controller.text);
+                      if (value != null) {
+                        _provider!.setGroupFund(value);
+                      }
+                      Navigator.pop(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      minimumSize: const Size(double.infinity, 46),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('确定', style: TextStyle(color: Colors.white, fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: const [],
+      ),
+    );
   }
 
   @override
@@ -428,13 +580,61 @@ class _ExpensePageState extends State<ExpensePage> {
       body: SafeArea(
         child: Column(
           children: [
-            _searchAddBar(),
-            _sortFilterBar(),
+            SearchAddBar(
+              searchController: _searchController,
+              searchFocusNode: _searchFocusNode,
+              searchFocused: _searchFocused,
+              onSearchChanged: (v) => setState(() {
+                _searchKeyword = v;
+                _currentExpenses = _applyAll(_provider!.sortedExpenses);
+              }),
+              onAddPressed: () => showAddExpenseSheet(context),
+              groupFund: _provider?.groupFund,
+              groupFundRemaining: _provider?.groupFundRemaining ?? 0,
+              onGroupFundTap: _showSetGroupFundDialog,
+              formatAmount: _formatAmount,
+            ),
+            SortFilterBar(
+              sortMode: _sortMode,
+              filterCategoryId: _filterCategoryId,
+              filterPerson: _filterPerson,
+              isDropdownOpen: _isDropdownOpen,
+              categories: Provider.of<CategoryProvider>(context).categories,
+              persons: <String>{
+                for (final e in _provider?.sortedExpenses ?? <Expense>[])
+                  if (e.fromPerson != '-' && e.fromPerson.isNotEmpty) e.fromPerson,
+              }.toList(),
+              onSortChanged: (v) => setState(() {
+                _sortMode = v;
+                _isDropdownOpen = false;
+                _currentExpenses = _applyAll(_provider!.sortedExpenses);
+              }),
+              onFilterAllCleared: () => setState(() {
+                _filterStatus = null;
+                _filterCategoryId = null;
+                _filterPerson = null;
+                _summaryFilter = -1;
+                _currentExpenses = _applyAll(_provider!.sortedExpenses);
+              }),
+              onFilterCategoryToggled: (catId) => setState(() {
+                _filterCategoryId = catId;
+                _currentExpenses = _applyAll(_provider!.sortedExpenses);
+              }),
+              onFilterPersonToggled: (person) => setState(() {
+                _filterPerson = person;
+                _currentExpenses = _applyAll(_provider!.sortedExpenses);
+              }),
+              onDropdownOpened: () => setState(() => _isDropdownOpen = true),
+              onDropdownCanceled: () => setState(() => _isDropdownOpen = false),
+            ),
             Expanded(
               child: SlidableAutoCloseBehavior(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: () => _searchFocusNode.unfocus(),
+                  onTap: () {
+                    _searchFocusNode.unfocus();
+                    if (_isMultiSelectMode) _exitMultiSelect();
+                  },
                   child: _isLoading
                       ? Center(
                           child: CircularProgressIndicator(
@@ -442,7 +642,7 @@ class _ExpensePageState extends State<ExpensePage> {
                           ),
                         )
                       : _currentExpenses.isEmpty
-                      ? _buildEmptyState()
+                      ? EmptyState(searchKeyword: _searchKeyword)
                       : _isFiltered
                       ? ListView.builder(
                           itemCount: _currentExpenses.length,
@@ -458,583 +658,97 @@ class _ExpensePageState extends State<ExpensePage> {
                 ),
               ),
             ),
-            _glassSummaryBar(),
+            _isMultiSelectMode
+                ? MultiSelectBar(
+                    selectedIds: _selectedIds,
+                    currentExpenses: _currentExpenses,
+                    onExit: _exitMultiSelect,
+                    onSelectAll: _selectAll,
+                    onBatchToggleBilled: _batchToggleBilled,
+                    onBatchDelete: _batchDelete,
+                  )
+                : GlassSummaryBar(
+                    allExpenses: _provider?.sortedExpenses ?? [],
+                    filterCategoryId: _filterCategoryId,
+                    filterPerson: _filterPerson,
+                    summaryFilter: _summaryFilter,
+                    onTotalTap: () => setState(() {
+                      _summaryFilter = -1;
+                      _filterStatus = null;
+                      _currentExpenses = _applyAll(_provider!.sortedExpenses);
+                    }),
+                    onBilledTap: () => setState(() {
+                      _summaryFilter = 1;
+                      _filterStatus = true;
+                      _currentExpenses = _applyAll(_provider!.sortedExpenses);
+                    }),
+                    onUnbilledTap: () => setState(() {
+                      _summaryFilter = 0;
+                      _filterStatus = false;
+                      _currentExpenses = _applyAll(_provider!.sortedExpenses);
+                    }),
+                  ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 48,
-            color: Theme.of(
-              context,
-            ).textTheme.bodySmall?.color?.withValues(alpha: 0.3),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            _searchKeyword.isNotEmpty ? '无匹配结果' : '暂无记录',
-            style: TextStyle(
-              fontSize: 15,
-              color: Theme.of(
-                context,
-              ).textTheme.bodySmall?.color?.withValues(alpha: 0.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _searchAddBar() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              height: 40,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _searchFocused
-                      ? Theme.of(context).primaryColor
-                      : Theme.of(context).dividerColor,
-                  width: _searchFocused ? 1.5 : 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 10),
-                  Icon(
-                    Icons.search,
-                    size: 20,
-                    color: Theme.of(context).textTheme.bodySmall?.color,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: TextField(
-                      focusNode: _searchFocusNode,
-                      controller: _searchController,
-                      style: const TextStyle(fontSize: 14),
-                      decoration: const InputDecoration(
-                        hintText: '搜索...',
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      onChanged: (v) => setState(() {
-                        _searchKeyword = v;
-                        _currentExpenses = _applyAll(_provider!.sortedExpenses);
-                      }),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 40,
-            height: 39,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Theme.of(context).primaryColor,
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: () => showAddExpenseSheet(context),
-              child: const Icon(Icons.add, color: Colors.white, size: 24),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _showSetGroupFundDialog,
-            child: Container(
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Theme.of(context).dividerColor),
-              ),
-              alignment: Alignment.center,
-              child: _provider?.groupFund != null
-                  ? Text(
-                      '余额 ${_formatAmount(_provider!.groupFundRemaining)}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: _provider!.groupFundRemaining < 0
-                            ? Theme.of(context).colorScheme.secondary
-                            : Theme.of(context).primaryColor,
-                      ),
-                    )
-                  : Text(
-                      '设置余额',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sortFilterBar() {
-    final catProvider = Provider.of<CategoryProvider>(context);
-    final categories = catProvider.categories;
-    final persons = <String>{
-      for (final e in _provider?.sortedExpenses ?? <Expense>[])
-        if (e.fromPerson != '-' && e.fromPerson.isNotEmpty) e.fromPerson,
-    }.toList();
-
-    return SizedBox(
-      height: 40,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-        child: Row(
-          children: [
-            _buildSortDropdown(),
-            const SizedBox(width: 6),
-            Container(
-              width: 1,
-              height: 16,
-              color: Theme.of(context).dividerColor,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _miniChip(
-                      '全部',
-                      _filterCategoryId == null && _filterPerson == null,
-                      () => setState(() {
-                        _filterStatus = null;
-                        _filterCategoryId = null;
-                        _filterPerson = null;
-                        _summaryFilter = -1;
-                        _currentExpenses = _applyAll(_provider!.sortedExpenses);
-                      }),
-                    ),
-                    for (final cat in categories)
-                      _miniChip(
-                        cat.name,
-                        _filterCategoryId == cat.id,
-                        () => setState(() {
-                          _filterCategoryId = _filterCategoryId == cat.id
-                              ? null
-                              : cat.id;
-                          _currentExpenses = _applyAll(
-                            _provider!.sortedExpenses,
-                          );
-                        }),
-                        color: cat.color,
-                      ),
-                    if (persons.isNotEmpty) ...[
-                      const SizedBox(width: 2),
-                      Container(
-                        width: 1,
-                        height: 16,
-                        color: Theme.of(context).dividerColor,
-                      ),
-                      const SizedBox(width: 6),
-                      for (final p in persons)
-                        _miniChip(
-                          p,
-                          _filterPerson == p,
-                          () => setState(() {
-                            _filterPerson = _filterPerson == p ? null : p;
-                            _currentExpenses = _applyAll(
-                              _provider!.sortedExpenses,
-                            );
-                          }),
-                        ),
-                    ]
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _miniChip(
-    String label,
-    bool selected,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
-    final c = color ?? Theme.of(context).primaryColor;
-    return Padding(
-      padding: const EdgeInsets.only(right: 4),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: selected ? c : c.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? c : Colors.transparent,
-              width: 1,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : c,
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSortDropdown() {
-    return PopupMenuButton<SortMode>(
-      offset: const Offset(0, 6),
-      position: PopupMenuPosition.under,
-      elevation: 8,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      constraints: const BoxConstraints(minWidth: 120),
-      onOpened: () => setState(() => _isDropdownOpen = true),
-      onCanceled: () => setState(() => _isDropdownOpen = false),
-      onSelected: (v) {
-        setState(() {
-          _sortMode = v;
-          _isDropdownOpen = false;
-          _currentExpenses = _applyAll(_provider!.sortedExpenses);
-        });
-      },
-      itemBuilder: (context) => SortMode.values.map((m) {
-        final selected = m == _sortMode;
-        return PopupMenuItem<SortMode>(
-          value: m,
-          height: 48,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _sortLabel(m),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected
-                        ? Theme.of(context).primaryColor
-                        : Theme.of(context).textTheme.bodyLarge?.color,
-                  ),
-                ),
-              ),
-              if (selected)
-                Icon(
-                  Icons.check,
-                  size: 20,
-                  color: Theme.of(context).primaryColor,
-                ),
-            ],
-          ),
-        );
-      }).toList(),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Theme.of(context).dividerColor),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _sortLabel(_sortMode),
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).textTheme.bodyMedium?.color,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              _isDropdownOpen
-                  ? Icons.keyboard_arrow_up
-                  : Icons.keyboard_arrow_down,
-              size: 18,
-              color: Theme.of(context).textTheme.bodySmall?.color,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _glassSummaryBar() {
-    final all = _provider?.sortedExpenses ?? [];
-    final base = all.where((e) {
-      if (_filterCategoryId != null && e.categoryId != _filterCategoryId) {
-        return false;
-      }
-      if (_filterPerson != null && e.fromPerson != _filterPerson) {
-        return false;
-      }
-      return true;
-    }).toList();
-    final total = base.fold<double>(0, (s, e) => s + e.amount);
-    final unclaimed = base
-        .where((e) => !e.isBilled)
-        .fold<double>(0, (s, e) => s + e.amount);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surface),
-      child: Row(
-        children: [
-          _summaryTab(
-            '总金额',
-            total,
-            _summaryFilter == -1,
-            () => setState(() {
-              _summaryFilter = -1;
-              _filterStatus = null;
-              _currentExpenses = _applyAll(_provider!.sortedExpenses);
-            }),
-            pillColor: const Color(0xFFF3F3F3).withValues(alpha: 0.25),
-          ),
-          _summaryTab(
-            '已报账',
-            total - unclaimed,
-            _summaryFilter == 1,
-            () => setState(() {
-              _summaryFilter = 1;
-              _filterStatus = true;
-              _currentExpenses = _applyAll(_provider!.sortedExpenses);
-            }),
-            labelColor: Theme.of(context).primaryColor,
-            pillColor: const Color(0xFFF3F3F3).withValues(alpha: 0.25),
-          ),
-          _summaryTab(
-            '未报账',
-            unclaimed,
-            _summaryFilter == 0,
-            () => setState(() {
-              _summaryFilter = 0;
-              _filterStatus = false;
-              _currentExpenses = _applyAll(_provider!.sortedExpenses);
-            }),
-            labelColor: Theme.of(context).colorScheme.secondary,
-            pillColor: const Color(0xFFF3F3F3).withValues(alpha: 0.25),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatAmount(double amount) {
-    if (amount >= 100000000) {
-      return '¥${(amount / 100000000).toStringAsFixed(2)}亿';
-    } else if (amount >= 10000) {
-      return '¥${(amount / 10000).toStringAsFixed(2)}万';
-    } else {
-      return '¥${amount.toStringAsFixed(2)}';
-    }
-  }
-
-  void _showSetGroupFundDialog() {
-    final controller = TextEditingController(
-      text: _provider?.groupFund?.toStringAsFixed(2) ?? '',
-    );
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(Icons.account_balance_wallet,
-                color: Theme.of(context).primaryColor, size: 24),
-            const SizedBox(width: 8),
-            const Text('设置余额', style: TextStyle(fontSize: 18)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: '请输入组里总资金',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                if (_provider?.groupFund != null) ...[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        _provider!.clearGroupFund();
-                        Navigator.pop(context);
-                      },
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.grey.withValues(alpha: 0.12),
-                        minimumSize: const Size(double.infinity, 46),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        side: BorderSide.none,
-                      ),
-                      child: const Text('清除', style: TextStyle(color: Colors.red, fontSize: 16)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                ],
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.grey.withValues(alpha: 0.12),
-                      minimumSize: const Size(double.infinity, 46),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      side: BorderSide.none,
-                    ),
-                    child: const Text('取消', style: TextStyle(fontSize: 16)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      final value = double.tryParse(controller.text);
-                      if (value != null) {
-                        _provider!.setGroupFund(value);
-                      }
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      minimumSize: const Size(double.infinity, 46),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text('确定', style: TextStyle(color: Colors.white, fontSize: 16)),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: const [],
-      ),
-    );
-  }
-
-  Widget _summaryTab(
-    String label,
-    double amount,
-    bool active,
-    VoidCallback onTap, {
-    Color? labelColor,
-    Color? pillColor,
-  }) {
-    final c = active
-        ? (labelColor ??
-              Theme.of(context).textTheme.bodyLarge?.color ??
-              Colors.black)
-        : Theme.of(
-                context,
-              ).textTheme.bodySmall?.color?.withValues(alpha: 0.5) ??
-              Colors.grey;
-    String amountStr;
-    if (amount >= 100000000) {
-      amountStr = '¥${(amount / 100000000).toStringAsFixed(2)}亿';
-    } else if (amount >= 10000) {
-      amountStr = '¥${(amount / 10000).toStringAsFixed(2)}万';
-    } else {
-      amountStr = '¥${amount.toStringAsFixed(2)}';
-    }
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedScale(
-          scale: active ? 1.08 : 1.0,
-          duration: const Duration(milliseconds: 200),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: c,
-                ),
-              ),
-              const SizedBox(height: 2),
-              SizedBox(
-                height: 16,
-                child: Text(
-                  amountStr,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: c,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 
   Widget _buildItem(Expense expense) {
-    return Slidable(
-      key: Key(expense.id),
-      endActionPane: ActionPane(
-        motion: const ScrollMotion(),
-        extentRatio: 0.6,
-        children: [
-          Builder(builder: (c) => Expanded(child: _buildPinAction(expense, c))),
-          const SizedBox(width: 5),
-          Builder(
-            builder: (c) => Expanded(child: _buildEditAction(expense, c)),
-          ),
-          const SizedBox(width: 5),
-          Builder(
-            builder: (c) => Expanded(child: _buildTrashAction(expense, c)),
-          ),
-        ],
-      ),
-      child: ExpenseItem(expense: expense),
+    final isSelected = _selectedIds.contains(expense.id);
+    return GestureDetector(
+      onLongPress: () {
+        if (!_isMultiSelectMode) {
+          _enterMultiSelect(expense.id);
+        }
+      },
+      onTap: () {
+        if (_isMultiSelectMode) {
+          _toggleSelect(expense.id);
+        }
+      },
+      child: _isMultiSelectMode
+          ? Container(
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Theme.of(context).primaryColor.withValues(alpha: 0.08)
+                    : null,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              child: Row(
+                children: [
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => _toggleSelect(expense.id),
+                    activeColor: Theme.of(context).primaryColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  Expanded(child: ExpenseItem(expense: expense)),
+                ],
+              ),
+            )
+          : Slidable(
+              key: Key(expense.id),
+              endActionPane: ActionPane(
+                motion: const ScrollMotion(),
+                extentRatio: 0.6,
+                children: [
+                  Builder(builder: (c) => Expanded(child: buildPinAction(expense, c))),
+                  const SizedBox(width: 5),
+                  Builder(
+                    builder: (c) => Expanded(child: buildEditAction(expense, c, () => _openEdit(expense))),
+                  ),
+                  const SizedBox(width: 5),
+                  Builder(
+                    builder: (c) => Expanded(child: buildTrashAction(expense, c)),
+                  ),
+                ],
+              ),
+              child: ExpenseItem(expense: expense),
+            ),
     );
   }
 
@@ -1044,93 +758,4 @@ class _ExpensePageState extends State<ExpensePage> {
       child: FadeTransition(opacity: a, child: _buildItem(e)),
     );
   }
-
-  Widget _buildEditAction(Expense expense, BuildContext context) =>
-      GestureDetector(
-        onTap: () {
-          _openEdit(expense);
-          Slidable.of(context)?.close();
-        },
-        child: Card(
-          margin: const EdgeInsets.all(5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: 2,
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.edit, color: Colors.blue, size: 24),
-              SizedBox(height: 4),
-              Text('编辑', style: TextStyle(fontSize: 14, color: Colors.blue)),
-            ],
-          ),
-        ),
-      );
-
-  Widget _buildPinAction(Expense expense, BuildContext context) =>
-      GestureDetector(
-        onTap: () {
-          Provider.of<ExpenseProvider>(
-            context,
-            listen: false,
-          ).togglePin(expense.id);
-          Slidable.of(context)?.close();
-        },
-        child: Card(
-          margin: const EdgeInsets.all(5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: 2,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                expense.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
-                color: Theme.of(context).colorScheme.tertiary,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                expense.isPinned ? '取消置顶' : '置顶',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.tertiary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-
-  Widget _buildTrashAction(Expense expense, BuildContext context) =>
-      GestureDetector(
-        onTap: () {
-          Provider.of<ExpenseProvider>(
-            context,
-            listen: false,
-          ).moveToTrash(expense.id);
-          Slidable.of(context)?.close();
-        },
-        child: Card(
-          margin: const EdgeInsets.all(5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          elevation: 2,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.delete_outline,
-                color: Theme.of(context).colorScheme.secondary,
-                size: 24,
-              ),
-              SizedBox(height: 4),
-              Text(
-                '删除',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).colorScheme.secondary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
 }

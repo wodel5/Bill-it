@@ -178,7 +178,7 @@ class _UpdateCheckDialogState extends State<_UpdateCheckDialog> {
                 fontWeight: FontWeight.w500,
               ),
             )
-          else if (_updateInfo != null)
+          else if (_updateInfo != null) ...[
             Text(
               '发现新版本: ${_updateInfo!.latestVersion}',
               style: TextStyle(
@@ -187,6 +187,35 @@ class _UpdateCheckDialogState extends State<_UpdateCheckDialog> {
                 fontWeight: FontWeight.w500,
               ),
             ),
+            if (_updateInfo!.body.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                '更新日志',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _updateInfo!.body,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
       actions: [
