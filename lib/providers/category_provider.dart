@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../data_models/category.dart';
+import '../models/category.dart';
 
 class CategoryProvider extends ChangeNotifier {
   final _storageKey = 'categories';

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data_models/expense.dart';
+import '../../models/expense.dart';
 
 class MultiSelectBar extends StatelessWidget {
   final Set<String> selectedIds;

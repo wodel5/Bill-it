@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data_models/category.dart';
+import '../../models/category.dart';
 import '../expense_page.dart';
 
 class SortFilterBar extends StatelessWidget {

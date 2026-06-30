@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../data_models/category.dart';
+import '../models/category.dart';
 import '../providers/category_provider.dart';
 
 Future<String?> showCategoryPicker(

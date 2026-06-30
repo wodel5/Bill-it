@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
-import '../../data_models/expense.dart';
+import '../../models/expense.dart';
 import '../../providers/expense_provider.dart';
 
 Widget buildPinAction(Expense expense, BuildContext context) => GestureDetector(

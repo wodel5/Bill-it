@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../data_models/expense.dart';
+import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import 'expense_form.dart';
 

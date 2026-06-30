@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:provider/provider.dart';
-import '../data_models/expense.dart';
+import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../providers/category_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/expense_item.dart';
-import '../popup/add_expense_sheet.dart';
-import '../popup/edit_expense_dialog.dart' show showEditExpenseSheet;
-import '../popup/trash_sheet.dart';
-import '../popup/updates.dart';
+import '../dialogs/add_expense_sheet.dart';
+import '../dialogs/edit_expense_dialog.dart' show showEditExpenseSheet;
+import '../dialogs/trash_sheet.dart';
+import '../dialogs/updates.dart';
 import '../services/update_service.dart';
 import 'widgets/search_add_bar.dart';
 import 'widgets/sort_filter_bar.dart';
@@ -665,36 +665,47 @@ class _ExpensePageState extends State<ExpensePage> {
                 ),
               ),
             ),
-            _isMultiSelectMode
-                ? MultiSelectBar(
-                    selectedIds: _selectedIds,
-                    currentExpenses: _currentExpenses,
-                    onExit: _exitMultiSelect,
-                    onSelectAll: _selectAll,
-                    onBatchToggleBilled: _batchToggleBilled,
-                    onBatchDelete: _batchDelete,
-                  )
-                : GlassSummaryBar(
-                    allExpenses: _provider?.sortedExpenses ?? [],
-                    filterCategoryId: _filterCategoryId,
-                    filterPerson: _filterPerson,
-                    summaryFilter: _summaryFilter,
-                    onTotalTap: () => setState(() {
-                      _summaryFilter = -1;
-                      _filterStatus = null;
-                      _currentExpenses = _applyAll(_provider!.sortedExpenses);
-                    }),
-                    onBilledTap: () => setState(() {
-                      _summaryFilter = 1;
-                      _filterStatus = true;
-                      _currentExpenses = _applyAll(_provider!.sortedExpenses);
-                    }),
-                    onUnbilledTap: () => setState(() {
-                      _summaryFilter = 0;
-                      _filterStatus = false;
-                      _currentExpenses = _applyAll(_provider!.sortedExpenses);
-                    }),
-                  ),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, anim) => SizeTransition(
+                sizeFactor: anim,
+                child: FadeTransition(opacity: anim, child: child),
+              ),
+              child: _isMultiSelectMode
+                  ? MultiSelectBar(
+                      key: const ValueKey('multi'),
+                      selectedIds: _selectedIds,
+                      currentExpenses: _currentExpenses,
+                      onExit: _exitMultiSelect,
+                      onSelectAll: _selectAll,
+                      onBatchToggleBilled: _batchToggleBilled,
+                      onBatchDelete: _batchDelete,
+                    )
+                  : GlassSummaryBar(
+                      key: const ValueKey('summary'),
+                      allExpenses: _provider?.sortedExpenses ?? [],
+                      filterCategoryId: _filterCategoryId,
+                      filterPerson: _filterPerson,
+                      summaryFilter: _summaryFilter,
+                      onTotalTap: () => setState(() {
+                        _summaryFilter = -1;
+                        _filterStatus = null;
+                        _currentExpenses = _applyAll(_provider!.sortedExpenses);
+                      }),
+                      onBilledTap: () => setState(() {
+                        _summaryFilter = 1;
+                        _filterStatus = true;
+                        _currentExpenses = _applyAll(_provider!.sortedExpenses);
+                      }),
+                      onUnbilledTap: () => setState(() {
+                        _summaryFilter = 0;
+                        _filterStatus = false;
+                        _currentExpenses = _applyAll(_provider!.sortedExpenses);
+                      }),
+                    ),
+            ),
           ],
         ),
       ),
@@ -715,48 +726,60 @@ class _ExpensePageState extends State<ExpensePage> {
           _toggleSelect(expense.id);
         }
       },
-      child: _isMultiSelectMode
-          ? Container(
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? Theme.of(context).primaryColor.withValues(alpha: 0.08)
-                    : null,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              child: Row(
-                children: [
-                  Checkbox(
-                    value: isSelected,
-                    onChanged: (_) => _toggleSelect(expense.id),
-                    activeColor: Theme.of(context).primaryColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  Expanded(child: ExpenseItem(expense: expense)),
-                ],
-              ),
-            )
-          : Slidable(
-              key: Key(expense.id),
-              endActionPane: ActionPane(
-                motion: const ScrollMotion(),
-                extentRatio: 0.6,
-                children: [
-                  Builder(builder: (c) => Expanded(child: buildPinAction(expense, c))),
-                  const SizedBox(width: 5),
-                  Builder(
-                    builder: (c) => Expanded(child: buildEditAction(expense, c, () => _openEdit(expense))),
-                  ),
-                  const SizedBox(width: 5),
-                  Builder(
-                    builder: (c) => Expanded(child: buildTrashAction(expense, c)),
-                  ),
-                ],
-              ),
-              child: ExpenseItem(expense: expense),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        decoration: BoxDecoration(
+          color: _isMultiSelectMode
+              ? (isSelected
+                  ? Theme.of(context).primaryColor.withValues(alpha: 0.08)
+                  : null)
+              : null,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        child: Row(
+          children: [
+            AnimatedSize(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              child: _isMultiSelectMode
+                  ? Checkbox(
+                      value: isSelected,
+                      onChanged: (_) => _toggleSelect(expense.id),
+                      activeColor: Theme.of(context).primaryColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    )
+                  : const SizedBox(width: 0, height: 0),
             ),
+            Expanded(
+              child: _isMultiSelectMode
+                  ? ExpenseItem(expense: expense)
+                  : Slidable(
+                      key: Key(expense.id),
+                      endActionPane: ActionPane(
+                        motion: const ScrollMotion(),
+                        extentRatio: 0.6,
+                        children: [
+                          Builder(builder: (c) => Expanded(child: buildPinAction(expense, c))),
+                          const SizedBox(width: 5),
+                          Builder(
+                            builder: (c) => Expanded(child: buildEditAction(expense, c, () => _openEdit(expense))),
+                          ),
+                          const SizedBox(width: 5),
+                          Builder(
+                            builder: (c) => Expanded(child: buildTrashAction(expense, c)),
+                          ),
+                        ],
+                      ),
+                      child: ExpenseItem(expense: expense),
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

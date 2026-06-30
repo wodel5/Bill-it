@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../data_models/expense.dart';
+import '../models/expense.dart';
 
 class ExpenseProvider extends ChangeNotifier {
   //定义一个私有缓存，钥匙名为'expenseRecords'
